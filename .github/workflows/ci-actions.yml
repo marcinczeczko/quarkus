@@ -160,10 +160,14 @@ jobs:
           NEO4J_dbms_memory_heap_initial__size: 10M
         ports:
           - 127.0.0.1:7687:7687
-      dynamodb:
-        image: amazon/dynamodb-local:1.11.477
+      amazonServices:
+        image: localstack/localstack
+        env:
+          SERVICES: s3,dynamodb
+          START_WEB: 0
         ports:
-          - 127.0.0.1:8000:8000
+          - 127.0.0.1:8000:4569
+          - 127.0.0.1:8008:4572
 
     steps:
       - name: Start mysql
@@ -264,10 +268,14 @@ jobs:
           NEO4J_dbms_memory_heap_initial__size: 10M
         ports:
           - 7687:7687
-      dynamodb:
-        image: amazon/dynamodb-local:1.11.477
+      amazonServices:
+        image: localstack/localstack
+        env:
+          SERVICES: s3,dynamodb
+          START_WEB: 0
         ports:
-          - 8000:8000
+          - 127.0.0.1:8000:4569
+          - 127.0.0.1:8008:4572
 
     steps:
       - name: Start mysql
@@ -361,10 +369,10 @@ jobs:
               narayana-stm
               narayana-jta
           - category: Amazon
-            dynamodb: "true"
+            amazonServices: "true"
             timeout: 20
             test-modules: >
-              amazon-dynamodb
+              amazon-services
               amazon-lambda
               amazon-lambda-http
           - category: Messaging
@@ -476,11 +484,11 @@ jobs:
             -e ACCEPT_EULA=Y -e SA_PASSWORD=ActuallyRequired11Complexity \
             -d microsoft/mssql-server-linux:2017-CU12
         if: matrix.mssql
-      - name: Dynamo DB Service
+      - name: Amazon Services
         run: |
-          docker run --rm --publish 8000:8000 --name build-dynamodb \
-            -d amazon/dynamodb-local:1.11.477
-        if: matrix.dynamodb
+          docker run --rm --publish 8000:4569 --publish 8008:4572 --name build-amazon-service-clients -e SERVICES=s3,dynamodb -e START_WEB=0 \
+            -d localstack/localstack
+        if: matrix.amazonServices
       - name: Neo4j Service
         run: |
           docker run --rm --publish 7687:7687 --name build-neo4j \
