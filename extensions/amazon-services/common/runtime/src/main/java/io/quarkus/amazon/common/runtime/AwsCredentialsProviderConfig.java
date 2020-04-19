@@ -3,6 +3,7 @@ package io.quarkus.amazon.common.runtime;
 import java.time.Duration;
 import java.util.Optional;
 
+import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.configuration.MemorySize;
@@ -44,27 +45,31 @@ public class AwsCredentialsProviderConfig {
     public AwsCredentialsProviderType type;
 
     /**
-     * Default credentials provider configuration
+     * Amazon Services - AwS Default credentials provider configuration
      */
     @ConfigItem
+    @ConfigDocSection
     public DefaultCredentialsProviderConfig defaultProvider;
 
     /**
-     * Static credentials provider configuration
+     * Amazon Services - AwS Static credentials provider configuration
      */
     @ConfigItem
+    @ConfigDocSection
     public StaticCredentialsProviderConfig staticProvider;
 
     /**
-     * AWS Profile credentials provider configuration
+     * Amazon Services - AwS AWS Profile credentials provider configuration
      */
     @ConfigItem
+    @ConfigDocSection
     public ProfileCredentialsProviderConfig profileProvider;
 
     /**
-     * Process credentials provider configuration
+     * Amazon Services - AwS Process credentials provider configuration
      */
     @ConfigItem
+    @ConfigDocSection
     public ProcessCredentialsProviderConfig processProvider;
 
     @ConfigGroup
