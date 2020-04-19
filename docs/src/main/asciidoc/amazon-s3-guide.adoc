@@ -181,9 +181,10 @@ public class FileObject {
 Nothing fancy. One important thing to note is that having a default constructor is required by the JSON serialization layer. The static `from` method creates a bean based on the `S3Object`
 object provided by the S3 client response when listing all the objects in a bucket.
 
-== Update the JAX-RS resource
+== Create JAX-RS resource
 
-Now create a `org.acme.s3.CommonResource` that will consist of helper methods that prepare S3 request objects for reading and adding items to the bucket.
+Now create a `org.acme.s3.CommonResource` that will consist of methods to prepare S3 request to get object from a S3 bucket, or to put file into a S3 bucket.
+Note a configuration property `bucket.name` is defined here as the request method required name of the S3 bucket.
 
 [source,java]
 ----
@@ -334,8 +335,6 @@ public class S3SyncClientResource extends CommonResource {
 }
 ----
 
-TBD: The implementation is pretty straightforward and you just need to define your endpoints using the JAX-RS annotations and use the `FruitSyncService` to list/add new fruits.
-
 == Configuring S3 clients
 
 Both S3 clients (sync and async) are configurable via the `application.properties` file that can be provided in the `src/main/resources` directory.
@@ -383,19 +382,25 @@ quarkus.amazon.aws.s3.region=us-east-1
 quarkus.amazon.aws.s3.credentials.type=static
 quarkus.amazon.aws.s3.credentials.static-provider.access-key-id=test-key
 quarkus.amazon.aws.s3.credentials.static-provider.secret-access-key=test-secret
+
+bucket.name=quarkus.s3.quickstart
 ----
 
 - `quarkus.amazon.aws.s3.region` - It's required by the client, but since you're using a local S3 instance you can pick any valid AWS region.
 - `quarkus.amazon.aws.s3.credentials.type` - Set `static` credentials provider with any values for `access-key-id` and `secret-access-key`
 - `quarkus.amazon.s3.endpoint-override` - Override the S3 client to use a local instance instead of an AWS service
+- `bucket.name` - Name of the S3 bucket
 
 If you want to work with an AWS account, you'd need to set it with:
 [source,properties]
 ----
+bucket.name=<your-bucket-name>
+
 quarkus.amazon.aws.s3.region=<YOUR_REGION>
 quarkus.amazon.aws.s3.credentials.type=default
 ----
 
+- `bucket.name` - name of the S3 bucket on your AWS account.
 - `quarkus.amazon.aws.s3.region` you should set it to the region where your S3 bucket was created,
 - `quarkus.amazon.aws.s3.credentials.type` - use the `default` credentials provider chain that looks for credentials in this order:
 - Java System Properties - `aws.accessKeyId` and `aws.secretKey`
@@ -403,6 +408,18 @@ quarkus.amazon.aws.s3.credentials.type=default
 * Credential profiles file at the default location (`~/.aws/credentials`) shared by all AWS SDKs and the AWS CLI
 * Credentials delivered through the Amazon EC2 container service if the `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` environment variable is set and the security manager has permission to access the variable,
 * Instance profile credentials delivered through the Amazon EC2 metadata service
+
+== Creating a frontend
+
+Now let's add a simple web page to interact with our `S3SyncClientResource`.
+Quarkus automatically serves static resources located under the `META-INF/resources` directory.
+In the `src/main/resources/META-INF/resources` directory, add a `s3.html` file with the content from this {quickstarts-blob-url}/mongodb-quickstart/src/main/resources/META-INF/resources/s3.html[s3.html] file in it.
+
+You can now interact with your REST service:
+
+* start Quarkus with `./mvnw compile quarkus:dev`
+* open a browser to `http://localhost:8080/s3.html`
+* upload new file to the current S3 bucket via the form and see the list of files in the bucket
 
 == Next steps
 
