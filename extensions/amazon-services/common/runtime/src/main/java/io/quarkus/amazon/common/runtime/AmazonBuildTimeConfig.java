@@ -2,6 +2,7 @@ package io.quarkus.amazon.common.runtime;
 
 import java.util.Map;
 
+import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -13,11 +14,13 @@ public class AmazonBuildTimeConfig {
      * SDK client configurations for AWS Service clients
      */
     @ConfigItem(name = ConfigItem.PARENT)
-    public Map<String, SdkBuildTimeConfig> extensionSdk;
+    @ConfigDocMapKey("aws-client-name")
+    public Map<String, SdkBuildTimeConfig> sdk;
 
     /**
      * Apache HTTP client transport configuration for AWS Service clients
      */
     @ConfigItem(name = "sync-client")
-    public Map<String, SyncHttpClientBuildTimeConfig> extensionSyncClient;
+    @ConfigDocMapKey("aws-client-name")
+    public Map<String, SyncHttpClientBuildTimeConfig> syncClient;
 }

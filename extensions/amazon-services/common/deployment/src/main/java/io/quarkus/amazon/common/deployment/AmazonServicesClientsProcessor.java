@@ -89,7 +89,7 @@ public class AmazonServicesClientsProcessor {
         checkNamedConfigs(amazonExtensions);
 
         for (String extension : amazonExtensions) {
-            SdkBuildTimeConfig extensionSdk = buildTimeConfig.extensionSdk.get(extension);
+            SdkBuildTimeConfig extensionSdk = buildTimeConfig.sdk.get(extension);
             if (extensionSdk != null) {
                 extensionSdk.interceptors.orElse(Collections.emptyList()).forEach(interceptorClass -> {
                     if (!knownInterceptorImpls.contains(interceptorClass.getName())) {
@@ -200,7 +200,7 @@ public class AmazonServicesClientsProcessor {
 
     private Set<SyncClientType> findRequiredSyncTypes(List<String> amazonExtensions) {
         return amazonExtensions.stream().map(ext -> {
-            SyncHttpClientBuildTimeConfig extSyncConfig = buildTimeConfig.extensionSyncClient.get(ext);
+            SyncHttpClientBuildTimeConfig extSyncConfig = buildTimeConfig.syncClient.get(ext);
             if (extSyncConfig != null) {
                 return extSyncConfig.type;
             } else { //If no syncConfig for extension available, URL connection client is used by default
@@ -219,14 +219,14 @@ public class AmazonServicesClientsProcessor {
     }
 
     private void checkNamedConfigs(List<String> amazonExtensions) {
-        for (String serviceName : buildTimeConfig.extensionSdk.keySet()) {
+        for (String serviceName : buildTimeConfig.sdk.keySet()) {
             if (!amazonExtensions.contains(serviceName)) {
                 throw new ConfigurationError(
                         String.format("quarkus.%s - Given Amazon Service client extension is not valid or not used.",
                                 serviceName));
             }
         }
-        for (String serviceName : buildTimeConfig.extensionSyncClient.keySet()) {
+        for (String serviceName : buildTimeConfig.syncClient.keySet()) {
             if (!amazonExtensions.contains(serviceName)) {
                 throw new ConfigurationError(
                         String.format(

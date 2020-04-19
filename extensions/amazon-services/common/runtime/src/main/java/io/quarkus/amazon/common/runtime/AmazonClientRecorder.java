@@ -32,15 +32,15 @@ public class AmazonClientRecorder {
     }
 
     private Optional<SdkConfig> getSdkConfig(String awsServiceName) {
-        return Optional.ofNullable(runtimeConfig.extensionSdk.get(awsServiceName));
+        return Optional.ofNullable(runtimeConfig.sdk.get(awsServiceName));
     }
 
     private Optional<AwsConfig> getAwsConfig(String awsServiceName) {
-        return Optional.ofNullable(runtimeConfig.extensionAws.get(awsServiceName));
+        return Optional.ofNullable(runtimeConfig.aws.get(awsServiceName));
     }
 
     private Optional<SdkBuildTimeConfig> getSdkBuildConfig(String awsServiceName) {
-        return Optional.ofNullable(buildTimeConfig).map(cfg -> cfg.extensionSdk.get(awsServiceName));
+        return Optional.ofNullable(buildTimeConfig).map(cfg -> cfg.sdk.get(awsServiceName));
     }
 
     public RuntimeValue<AwsClientBuilder> configureClient(RuntimeValue<? extends AwsClientBuilder> clientBuilder,

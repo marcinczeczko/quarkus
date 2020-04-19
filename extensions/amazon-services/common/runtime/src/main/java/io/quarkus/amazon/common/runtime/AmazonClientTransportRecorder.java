@@ -34,15 +34,15 @@ public class AmazonClientTransportRecorder {
     }
 
     private Optional<SyncHttpClientConfig> getSyncRuntimeConfig(String awsServiceName) {
-        return Optional.ofNullable(config.extensionSyncClient.get(awsServiceName));
+        return Optional.ofNullable(config.syncClient.get(awsServiceName));
     }
 
     private Optional<NettyHttpClientConfig> getAsyncRuntimeConfig(String awsServiceName) {
-        return Optional.ofNullable(config.extensionAsyncClient.get(awsServiceName));
+        return Optional.ofNullable(config.asyncClient.get(awsServiceName));
     }
 
     private SyncClientType getExtensionSyncClientType(String extension) {
-        return Optional.ofNullable(buildTimeConfig.extensionSyncClient.get(extension))
+        return Optional.ofNullable(buildTimeConfig.syncClient.get(extension))
                 .map(cfg -> cfg.type)
                 .orElse(SyncClientType.URL);
     }
