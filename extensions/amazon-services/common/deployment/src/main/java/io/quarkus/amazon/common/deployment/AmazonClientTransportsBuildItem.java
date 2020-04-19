@@ -16,17 +16,17 @@ public final class AmazonClientTransportsBuildItem extends MultiBuildItem {
     private final RuntimeValue<SdkHttpClient.Builder> syncTransport;
     private final RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport;
 
-    private final String extensionName;
+    private final String awsClientName;
 
     public AmazonClientTransportsBuildItem(Optional<DotName> syncClassName, Optional<DotName> asyncClassName,
             RuntimeValue<Builder> syncTransport,
             RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport,
-            String extensionName) {
+            String awsClientName) {
         this.syncClassName = syncClassName;
         this.asyncClassName = asyncClassName;
         this.syncTransport = syncTransport;
         this.asyncTransport = asyncTransport;
-        this.extensionName = extensionName;
+        this.awsClientName = awsClientName;
     }
 
     public Optional<DotName> getSyncClassName() {
@@ -45,7 +45,7 @@ public final class AmazonClientTransportsBuildItem extends MultiBuildItem {
         return asyncTransport;
     }
 
-    public String getExtensionName() {
-        return extensionName;
+    public String getAwsClientName() {
+        return awsClientName;
     }
 }

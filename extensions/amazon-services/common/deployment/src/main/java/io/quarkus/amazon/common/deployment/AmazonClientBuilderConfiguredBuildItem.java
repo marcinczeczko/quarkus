@@ -5,19 +5,19 @@ import io.quarkus.runtime.RuntimeValue;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 
 public final class AmazonClientBuilderConfiguredBuildItem extends MultiBuildItem {
-    private final String extensionName;
+    private final String awsClientName;
     private final RuntimeValue<? extends AwsClientBuilder> syncBuilder;
     private final RuntimeValue<? extends AwsClientBuilder> asyncBuilder;
 
-    public AmazonClientBuilderConfiguredBuildItem(String extensionName, RuntimeValue<? extends AwsClientBuilder> syncBuilder,
+    public AmazonClientBuilderConfiguredBuildItem(String awsClientName, RuntimeValue<? extends AwsClientBuilder> syncBuilder,
             RuntimeValue<? extends AwsClientBuilder> asyncBuilder) {
-        this.extensionName = extensionName;
+        this.awsClientName = awsClientName;
         this.syncBuilder = syncBuilder;
         this.asyncBuilder = asyncBuilder;
     }
 
-    public String getExtensionName() {
-        return extensionName;
+    public String getAwsClientName() {
+        return awsClientName;
     }
 
     public RuntimeValue<? extends AwsClientBuilder> getSyncBuilder() {

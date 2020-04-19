@@ -81,22 +81,22 @@ public class AmazonServicesClientsProcessor {
                 .stream()
                 .map(c -> c.name().toString()).collect(Collectors.toList());
 
-        //Collect all Amazon Services extensions used
-        List<String> amazonExtensions = amazonClients.stream().map(AmazonClientBuildItem::getExtensionName)
+        //Collect all Amazon Services clients used
+        List<String> clientsToBuild = amazonClients.stream().map(AmazonClientBuildItem::getAwsClientName)
                 .collect(Collectors.toList());
 
         //Validate configurations
-        checkNamedConfigs(amazonExtensions);
+        checkNamedConfigs(clientsToBuild);
 
-        for (String extension : amazonExtensions) {
-            SdkBuildTimeConfig extensionSdk = buildTimeConfig.sdk.get(extension);
-            if (extensionSdk != null) {
-                extensionSdk.interceptors.orElse(Collections.emptyList()).forEach(interceptorClass -> {
+        for (String extension : clientsToBuild) {
+            SdkBuildTimeConfig clientSdkConfig = buildTimeConfig.sdk.get(extension);
+            if (clientSdkConfig != null) {
+                clientSdkConfig.interceptors.orElse(Collections.emptyList()).forEach(interceptorClass -> {
                     if (!knownInterceptorImpls.contains(interceptorClass.getName())) {
                         throw new ConfigurationError(
                                 String.format(
                                         "quarkus.dynamodb.sdk.interceptors (%s) - must list only existing implementations of software.amazon.awssdk.core.interceptor.ExecutionInterceptor",
-                                        extensionSdk.interceptors.toString()));
+                                        clientSdkConfig.interceptors.toString()));
                     }
                 });
             }
@@ -115,7 +115,7 @@ public class AmazonServicesClientsProcessor {
 
         //Register only clients that are used
         if (syncTransportNeeded) {
-            if (findRequiredSyncTypes(amazonExtensions).contains(SyncClientType.APACHE)) {
+            if (findRequiredSyncTypes(clientsToBuild).contains(SyncClientType.APACHE)) {
                 checkClasspath(APACHE_HTTP_SERVICE, "apache-client");
                 //Register Apache client as sync client
                 proxyDefinition
@@ -157,11 +157,11 @@ public class AmazonServicesClientsProcessor {
             RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport = null;
 
             if (client.getSyncClassName().isPresent()) {
-                syncTransport = transportRecorder.createSyncTransport(client.getExtensionName());
+                syncTransport = transportRecorder.createSyncTransport(client.getAwsClientName());
             }
 
             if (client.getAsyncClassName().isPresent()) {
-                asyncTransport = transportRecorder.createAsyncTransport(client.getExtensionName());
+                asyncTransport = transportRecorder.createAsyncTransport(client.getAwsClientName());
             }
 
             clientTransports.produce(
@@ -169,7 +169,7 @@ public class AmazonServicesClientsProcessor {
                             client.getSyncClassName(), client.getAsyncClassName(),
                             syncTransport,
                             asyncTransport,
-                            client.getExtensionName()));
+                            client.getAwsClientName()));
         }
     }
 
@@ -189,12 +189,12 @@ public class AmazonServicesClientsProcessor {
             RuntimeValue<? extends AwsClientBuilder> asyncBuilder = null;
 
             if (client.getSyncBuilder() != null) {
-                syncBuilder = recorder.configureClient(client.getSyncBuilder(), client.getExtensionName());
+                syncBuilder = recorder.configureClient(client.getSyncBuilder(), client.getAwsClientName());
             }
             if (client.getAsyncBuilder() != null) {
-                asyncBuilder = recorder.configureClient(client.getAsyncBuilder(), client.getExtensionName());
+                asyncBuilder = recorder.configureClient(client.getAsyncBuilder(), client.getAwsClientName());
             }
-            producer.produce(new AmazonClientBuilderConfiguredBuildItem(client.getExtensionName(), syncBuilder, asyncBuilder));
+            producer.produce(new AmazonClientBuilderConfiguredBuildItem(client.getAwsClientName(), syncBuilder, asyncBuilder));
         }
     }
 

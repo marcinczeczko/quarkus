@@ -12,13 +12,13 @@ import io.quarkus.builder.item.MultiBuildItem;
 public final class AmazonClientBuildItem extends MultiBuildItem {
     private final Optional<DotName> syncClassName;
     private final Optional<DotName> asyncClassName;
-    private final String extensionName;
+    private final String awsClientName;
 
     public AmazonClientBuildItem(Optional<DotName> syncClassName, Optional<DotName> asyncClassName,
-            String extensionName) {
+            String awsClientName) {
         this.syncClassName = syncClassName;
         this.asyncClassName = asyncClassName;
-        this.extensionName = extensionName;
+        this.awsClientName = awsClientName;
     }
 
     public Optional<DotName> getSyncClassName() {
@@ -29,7 +29,7 @@ public final class AmazonClientBuildItem extends MultiBuildItem {
         return asyncClassName;
     }
 
-    public String getExtensionName() {
-        return extensionName;
+    public String getAwsClientName() {
+        return awsClientName;
     }
 }

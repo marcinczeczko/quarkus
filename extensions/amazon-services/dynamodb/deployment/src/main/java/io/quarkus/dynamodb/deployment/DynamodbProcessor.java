@@ -29,7 +29,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 public class DynamodbProcessor extends AbstractAmazonServiceProcessor {
 
     @Override
-    protected String extensionName() {
+    protected String amazonServiceClientName() {
         return FeatureBuildItem.DYNAMODB;
     }
 

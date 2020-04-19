@@ -28,7 +28,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 
 public class S3Processor extends AbstractAmazonServiceProcessor {
     @Override
-    protected String extensionName() {
+    protected String amazonServiceClientName() {
         return "s3";
     }
 

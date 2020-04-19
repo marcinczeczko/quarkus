@@ -21,7 +21,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 abstract public class AbstractAmazonServiceProcessor {
 
-    abstract protected String extensionName();
+    abstract protected String amazonServiceClientName();
 
     abstract protected DotName syncClientName();
 
@@ -35,8 +35,8 @@ abstract public class AbstractAmazonServiceProcessor {
             BuildProducer<AmazonClientInterceptorsPathBuildItem> interceptors,
             BuildProducer<AmazonClientBuildItem> clientProducer) {
 
-        feature.produce(new FeatureBuildItem(extensionName()));
-        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(extensionName()));
+        feature.produce(new FeatureBuildItem(amazonServiceClientName()));
+        extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(amazonServiceClientName()));
         interceptors.produce(new AmazonClientInterceptorsPathBuildItem(builtinInterceptorsPath()));
 
         Optional<DotName> syncClassName = Optional.empty();
@@ -54,7 +54,7 @@ abstract public class AbstractAmazonServiceProcessor {
             }
         }
         if (syncClassName.isPresent() || asyncClassName.isPresent()) {
-            clientProducer.produce(new AmazonClientBuildItem(syncClassName, asyncClassName, extensionName()));
+            clientProducer.produce(new AmazonClientBuildItem(syncClassName, asyncClassName, amazonServiceClientName()));
         }
     }
 
@@ -64,7 +64,7 @@ abstract public class AbstractAmazonServiceProcessor {
             Function<RuntimeValue<SdkAsyncHttpClient.Builder>, RuntimeValue<AwsClientBuilder>> asyncFunc) {
 
         for (AmazonClientTransportsBuildItem client : clients) {
-            if (extensionName().equals(client.getExtensionName())) {
+            if (amazonServiceClientName().equals(client.getAwsClientName())) {
                 RuntimeValue<AwsClientBuilder> syncBuilder = null;
                 RuntimeValue<AwsClientBuilder> asyncBuilder = null;
                 if (client.getSyncClassName().isPresent()) {
@@ -73,7 +73,7 @@ abstract public class AbstractAmazonServiceProcessor {
                 if (client.getAsyncClassName().isPresent()) {
                     asyncBuilder = asyncFunc.apply(client.getAsyncTransport());
                 }
-                builderProducer.produce(new AmazonClientBuilderBuildItem(client.getExtensionName(), syncBuilder, asyncBuilder));
+                builderProducer.produce(new AmazonClientBuilderBuildItem(client.getAwsClientName(), syncBuilder, asyncBuilder));
             }
         }
     }
@@ -83,7 +83,7 @@ abstract public class AbstractAmazonServiceProcessor {
             Function<RuntimeValue<? extends AwsClientBuilder>, RuntimeValue<? extends SdkClient>> asyncClient) {
 
         for (AmazonClientBuilderConfiguredBuildItem client : configuredClients) {
-            if (extensionName().equals(client.getExtensionName())) {
+            if (amazonServiceClientName().equals(client.getAwsClientName())) {
                 if (client.getSyncBuilder() != null) {
                     syncClient.apply(client.getSyncBuilder());
                 }
