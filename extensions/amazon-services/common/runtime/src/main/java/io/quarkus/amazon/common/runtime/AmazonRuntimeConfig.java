@@ -24,7 +24,7 @@ public class AmazonRuntimeConfig {
     /**
      * Amazon Services - AWS service configurations
      */
-    @ConfigItem(name = "aws")
+    @ConfigItem(name = ConfigItem.PARENT)
     @ConfigDocMapKey("aws-client-name")
     @ConfigDocSection
     public Map<String, AwsConfig> aws;

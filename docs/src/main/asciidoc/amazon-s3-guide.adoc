@@ -133,7 +133,7 @@ The class defines three fields:
 * `fileName` that captures a filename as provided by the submited form
 * `mimeType` content type of the uploaded file
 
-In the second step let's create a bean that will represent a file in a S3 bucket as follows:
+In the second step let's create a bean that will represent a file in a Amazon S3 bucket as follows:
 
 [source,java]
 ----
@@ -362,15 +362,8 @@ And add following dependency to the application `pom.xml`:
 <dependency>
     <groupId>software.amazon.awssdk</groupId>
     <artifactId>apache-client</artifactId>
-    <exclusions>
-        <exclusion>
-            <groupId>commons-logging</groupId>
-            <artifactId>commons-logging</artifactId>
-        </exclusion>
-    </exclusions>
 </dependency>
 ----
-NOTE: It's important to exclude `commons-logging` from the client dependency to force Apache HTTP client to use Quarkus logger.
 
 If you're going to use a local S3 instance, configure it as follows:
 
@@ -378,16 +371,16 @@ If you're going to use a local S3 instance, configure it as follows:
 ----
 quarkus.amazon.s3.endpoint-override=http://localhost:8008
 
-quarkus.amazon.aws.s3.region=us-east-1
-quarkus.amazon.aws.s3.credentials.type=static
-quarkus.amazon.aws.s3.credentials.static-provider.access-key-id=test-key
-quarkus.amazon.aws.s3.credentials.static-provider.secret-access-key=test-secret
+quarkus.amazon.s3.region=us-east-1
+quarkus.amazon.s3.credentials.type=static
+quarkus.amazon.s3.credentials.static-provider.access-key-id=test-key
+quarkus.amazon.s3.credentials.static-provider.secret-access-key=test-secret
 
 bucket.name=quarkus.s3.quickstart
 ----
 
-- `quarkus.amazon.aws.s3.region` - It's required by the client, but since you're using a local S3 instance you can pick any valid AWS region.
-- `quarkus.amazon.aws.s3.credentials.type` - Set `static` credentials provider with any values for `access-key-id` and `secret-access-key`
+- `quarkus.amazon.s3.region` - It's required by the client, but since you're using a local S3 instance you can pick any valid AWS region.
+- `quarkus.amazon.s3.credentials.type` - Set `static` credentials provider with any values for `access-key-id` and `secret-access-key`
 - `quarkus.amazon.s3.endpoint-override` - Override the S3 client to use a local instance instead of an AWS service
 - `bucket.name` - Name of the S3 bucket
 
@@ -396,13 +389,13 @@ If you want to work with an AWS account, you'd need to set it with:
 ----
 bucket.name=<your-bucket-name>
 
-quarkus.amazon.aws.s3.region=<YOUR_REGION>
-quarkus.amazon.aws.s3.credentials.type=default
+quarkus.amazon.s3.region=<YOUR_REGION>
+quarkus.amazon.s3.credentials.type=default
 ----
 
 - `bucket.name` - name of the S3 bucket on your AWS account.
-- `quarkus.amazon.aws.s3.region` you should set it to the region where your S3 bucket was created,
-- `quarkus.amazon.aws.s3.credentials.type` - use the `default` credentials provider chain that looks for credentials in this order:
+- `quarkus.amazon.s3.region` you should set it to the region where your S3 bucket was created,
+- `quarkus.amazon.s3.credentials.type` - use the `default` credentials provider chain that looks for credentials in this order:
 - Java System Properties - `aws.accessKeyId` and `aws.secretKey`
 * Environment Variables - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 * Credential profiles file at the default location (`~/.aws/credentials`) shared by all AWS SDKs and the AWS CLI
