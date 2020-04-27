@@ -2,38 +2,27 @@ package io.quarkus.amazon.common.deployment;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import javax.enterprise.inject.spi.DeploymentException;
 
 import org.jboss.jandex.DotName;
 
-import io.quarkus.amazon.common.runtime.AmazonBuildTimeConfig;
-import io.quarkus.amazon.common.runtime.AmazonClientRecorder;
-import io.quarkus.amazon.common.runtime.AmazonClientTransportRecorder;
-import io.quarkus.amazon.common.runtime.AmazonRuntimeConfig;
+import com.google.common.base.Predicate;
+
 import io.quarkus.amazon.common.runtime.SdkBuildTimeConfig;
-import io.quarkus.amazon.common.runtime.SyncHttpClientBuildTimeConfig;
 import io.quarkus.amazon.common.runtime.SyncHttpClientBuildTimeConfig.SyncClientType;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.ExecutionTime;
-import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
-import io.quarkus.runtime.RuntimeValue;
-import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.core.interceptor.ExecutionInterceptor;
-import software.amazon.awssdk.http.SdkHttpClient.Builder;
 import software.amazon.awssdk.http.SdkHttpService;
-import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.async.SdkAsyncHttpService;
 
 public class AmazonServicesClientsProcessor {
@@ -44,13 +33,6 @@ public class AmazonServicesClientsProcessor {
     private static final String URL_HTTP_SERVICE = "software.amazon.awssdk.http.urlconnection.UrlConnectionSdkHttpService";
 
     private static final DotName EXECUTION_INTERCEPTOR_NAME = DotName.createSimple(ExecutionInterceptor.class.getName());
-
-    AmazonBuildTimeConfig buildTimeConfig;
-
-    @BuildStep
-    JniBuildItem jni() {
-        return new JniBuildItem();
-    }
 
     @BuildStep
     void globalInterceptors(BuildProducer<AmazonClientInterceptorsPathBuildItem> producer) {
@@ -63,7 +45,7 @@ public class AmazonServicesClientsProcessor {
         return new AdditionalApplicationArchiveMarkerBuildItem(AWS_SDK_APPLICATION_ARCHIVE_MARKERS);
     }
 
-    @BuildStep(loadsApplicationClasses = true)
+    @BuildStep
     void setup(CombinedIndexBuildItem combinedIndexBuildItem,
             List<AmazonClientBuildItem> amazonClients,
             List<AmazonClientInterceptorsPathBuildItem> interceptors,
@@ -81,15 +63,9 @@ public class AmazonServicesClientsProcessor {
                 .stream()
                 .map(c -> c.name().toString()).collect(Collectors.toList());
 
-        //Collect all Amazon Services clients used
-        List<String> clientsToBuild = amazonClients.stream().map(AmazonClientBuildItem::getAwsClientName)
-                .collect(Collectors.toList());
-
         //Validate configurations
-        checkNamedConfigs(clientsToBuild);
-
-        for (String extension : clientsToBuild) {
-            SdkBuildTimeConfig clientSdkConfig = buildTimeConfig.sdk.get(extension);
+        for (AmazonClientBuildItem client : amazonClients) {
+            SdkBuildTimeConfig clientSdkConfig = client.getBuildTimeSdkConfig();
             if (clientSdkConfig != null) {
                 clientSdkConfig.interceptors.orElse(Collections.emptyList()).forEach(interceptorClass -> {
                     if (!knownInterceptorImpls.contains(interceptorClass.getName())) {
@@ -112,10 +88,12 @@ public class AmazonServicesClientsProcessor {
 
         boolean syncTransportNeeded = amazonClients.stream().anyMatch(item -> item.getSyncClassName().isPresent());
         boolean asyncTransportNeeded = amazonClients.stream().anyMatch(item -> item.getAsyncClassName().isPresent());
+        final Predicate<AmazonClientBuildItem> isSyncApache = client -> client
+                .getBuildTimeSyncConfig().type == SyncClientType.APACHE;
 
         //Register only clients that are used
         if (syncTransportNeeded) {
-            if (findRequiredSyncTypes(clientsToBuild).contains(SyncClientType.APACHE)) {
+            if (amazonClients.stream().filter(isSyncApache).findAny().isPresent()) {
                 checkClasspath(APACHE_HTTP_SERVICE, "apache-client");
                 //Register Apache client as sync client
                 proxyDefinition
@@ -140,99 +118,12 @@ public class AmazonServicesClientsProcessor {
         }
     }
 
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    void createTransportBuilders(AmazonClientTransportRecorder transportRecorder,
-            AmazonRuntimeConfig runtimeConfig,
-            List<AmazonClientBuildItem> amazonClients,
-            BuildProducer<AmazonClientTransportsBuildItem> clientTransports) {
-
-        if (!amazonClients.isEmpty()) {
-            transportRecorder.configureRuntimeConfig(runtimeConfig);
-            transportRecorder.setBuildConfig(buildTimeConfig);
-        }
-
-        for (AmazonClientBuildItem client : amazonClients) {
-            RuntimeValue<Builder> syncTransport = null;
-            RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport = null;
-
-            if (client.getSyncClassName().isPresent()) {
-                syncTransport = transportRecorder.createSyncTransport(client.getAwsClientName());
-            }
-
-            if (client.getAsyncClassName().isPresent()) {
-                asyncTransport = transportRecorder.createAsyncTransport(client.getAwsClientName());
-            }
-
-            clientTransports.produce(
-                    new AmazonClientTransportsBuildItem(
-                            client.getSyncClassName(), client.getAsyncClassName(),
-                            syncTransport,
-                            asyncTransport,
-                            client.getAwsClientName()));
-        }
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    void configureClients(List<AmazonClientBuilderBuildItem> clients, AmazonClientRecorder recorder,
-            AmazonRuntimeConfig runtimeConfig,
-            BuildProducer<AmazonClientBuilderConfiguredBuildItem> producer) {
-
-        if (!clients.isEmpty()) {
-            recorder.configureRuntimeConfig(runtimeConfig);
-            recorder.setBuildConfig(buildTimeConfig);
-        }
-
-        for (AmazonClientBuilderBuildItem client : clients) {
-            RuntimeValue<? extends AwsClientBuilder> syncBuilder = null;
-            RuntimeValue<? extends AwsClientBuilder> asyncBuilder = null;
-
-            if (client.getSyncBuilder() != null) {
-                syncBuilder = recorder.configureClient(client.getSyncBuilder(), client.getAwsClientName());
-            }
-            if (client.getAsyncBuilder() != null) {
-                asyncBuilder = recorder.configureClient(client.getAsyncBuilder(), client.getAwsClientName());
-            }
-            producer.produce(new AmazonClientBuilderConfiguredBuildItem(client.getAwsClientName(), syncBuilder, asyncBuilder));
-        }
-    }
-
-    private Set<SyncClientType> findRequiredSyncTypes(List<String> amazonExtensions) {
-        return amazonExtensions.stream().map(ext -> {
-            SyncHttpClientBuildTimeConfig extSyncConfig = buildTimeConfig.syncClient.get(ext);
-            if (extSyncConfig != null) {
-                return extSyncConfig.type;
-            } else { //If no syncConfig for extension available, URL connection client is used by default
-                return SyncClientType.URL;
-            }
-        }).collect(Collectors.toSet());
-    }
-
     private void checkClasspath(String className, String dependencyName) {
         try {
             Class.forName(className, true, Thread.currentThread().getContextClassLoader());
         } catch (ClassNotFoundException e) {
             throw new DeploymentException(
                     "Missing 'software.amazon.awssdk:" + dependencyName + "' dependency on the classpath");
-        }
-    }
-
-    private void checkNamedConfigs(List<String> amazonExtensions) {
-        for (String serviceName : buildTimeConfig.sdk.keySet()) {
-            if (!amazonExtensions.contains(serviceName)) {
-                throw new ConfigurationError(
-                        String.format("quarkus.%s - Given Amazon Service client extension is not valid or not used.",
-                                serviceName));
-            }
-        }
-        for (String serviceName : buildTimeConfig.syncClient.keySet()) {
-            if (!amazonExtensions.contains(serviceName)) {
-                throw new ConfigurationError(
-                        String.format(
-                                "quarkus.%s.sync-client - Given Amazon Service client extension is not valid or not used.",
-                                serviceName));
-            }
         }
     }
 }

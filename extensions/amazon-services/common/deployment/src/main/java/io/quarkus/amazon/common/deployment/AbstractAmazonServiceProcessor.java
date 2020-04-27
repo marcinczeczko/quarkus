@@ -7,6 +7,14 @@ import java.util.function.Function;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
+import io.quarkus.amazon.common.runtime.AmazonClientRecorder;
+import io.quarkus.amazon.common.runtime.AmazonClientTransportRecorder;
+import io.quarkus.amazon.common.runtime.AwsConfig;
+import io.quarkus.amazon.common.runtime.NettyHttpClientConfig;
+import io.quarkus.amazon.common.runtime.SdkBuildTimeConfig;
+import io.quarkus.amazon.common.runtime.SdkConfig;
+import io.quarkus.amazon.common.runtime.SyncHttpClientBuildTimeConfig;
+import io.quarkus.amazon.common.runtime.SyncHttpClientConfig;
 import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.InjectionPointInfo;
@@ -17,6 +25,7 @@ import io.quarkus.runtime.RuntimeValue;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.core.SdkClient;
 import software.amazon.awssdk.http.SdkHttpClient;
+import software.amazon.awssdk.http.SdkHttpClient.Builder;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 abstract public class AbstractAmazonServiceProcessor {
@@ -33,7 +42,9 @@ abstract public class AbstractAmazonServiceProcessor {
             BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<AmazonClientInterceptorsPathBuildItem> interceptors,
-            BuildProducer<AmazonClientBuildItem> clientProducer) {
+            BuildProducer<AmazonClientBuildItem> clientProducer,
+            SdkBuildTimeConfig buildTimeSdkConfig,
+            SyncHttpClientBuildTimeConfig buildTimeSyncConfig) {
 
         feature.produce(new FeatureBuildItem(amazonServiceClientName()));
         extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(amazonServiceClientName()));
@@ -54,8 +65,40 @@ abstract public class AbstractAmazonServiceProcessor {
             }
         }
         if (syncClassName.isPresent() || asyncClassName.isPresent()) {
-            clientProducer.produce(new AmazonClientBuildItem(syncClassName, asyncClassName, amazonServiceClientName()));
+            clientProducer.produce(new AmazonClientBuildItem(syncClassName, asyncClassName, amazonServiceClientName(),
+                    buildTimeSdkConfig, buildTimeSyncConfig));
         }
+    }
+
+    public void setupHttpClients(SyncHttpClientConfig syncConfig, NettyHttpClientConfig asyncConfig,
+            AmazonClientTransportRecorder transportRecorder,
+            List<AmazonClientBuildItem> amazonClients, BuildProducer<AmazonClientTransportsBuildItem> clientTransports) {
+
+        Optional<AmazonClientBuildItem> dynamoBuildItem = amazonClients.stream()
+                .filter(c -> c.getAwsClientName().equals(amazonServiceClientName()))
+                .findAny();
+
+        dynamoBuildItem.ifPresent(dynamoClient -> {
+            RuntimeValue<Builder> syncTransport = null;
+            RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport = null;
+
+            if (dynamoClient.getSyncClassName().isPresent()) {
+                syncTransport = transportRecorder.createSyncTransport(amazonServiceClientName(),
+                        dynamoClient.getBuildTimeSyncConfig(),
+                        syncConfig);
+            }
+
+            if (dynamoClient.getAsyncClassName().isPresent()) {
+                asyncTransport = transportRecorder.createAsyncTransport(amazonServiceClientName(), asyncConfig);
+            }
+            clientTransports.produce(
+                    new AmazonClientTransportsBuildItem(
+                            dynamoClient.getSyncClassName(), dynamoClient.getAsyncClassName(),
+                            syncTransport,
+                            asyncTransport,
+                            dynamoClient.getAwsClientName()));
+        });
+
     }
 
     protected void createExtensionClients(List<AmazonClientTransportsBuildItem> clients,
@@ -92,5 +135,28 @@ abstract public class AbstractAmazonServiceProcessor {
                 }
             }
         }
+    }
+
+    protected void initClient(List<AmazonClientBuilderBuildItem> clients, AmazonClientRecorder recorder, AwsConfig awsConfig,
+            SdkConfig sdkConfig, SdkBuildTimeConfig sdkBuildConfig,
+            BuildProducer<AmazonClientBuilderConfiguredBuildItem> producer) {
+        Optional<AmazonClientBuilderBuildItem> dynamoBuildItem = clients.stream()
+                .filter(c -> c.getAwsClientName().equals(amazonServiceClientName()))
+                .findAny();
+
+        dynamoBuildItem.ifPresent(client -> {
+            RuntimeValue<? extends AwsClientBuilder> syncBuilder = null;
+            RuntimeValue<? extends AwsClientBuilder> asyncBuilder = null;
+
+            if (client.getSyncBuilder() != null) {
+                syncBuilder = recorder.configureClient(client.getSyncBuilder(), awsConfig, sdkConfig,
+                        sdkBuildConfig, amazonServiceClientName());
+            }
+            if (client.getAsyncBuilder() != null) {
+                asyncBuilder = recorder.configureClient(client.getAsyncBuilder(), awsConfig, sdkConfig,
+                        sdkBuildConfig, amazonServiceClientName());
+            }
+            producer.produce(new AmazonClientBuilderConfiguredBuildItem(amazonServiceClientName(), syncBuilder, asyncBuilder));
+        });
     }
 }

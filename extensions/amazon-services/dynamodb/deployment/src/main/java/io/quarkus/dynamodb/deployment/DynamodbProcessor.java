@@ -10,6 +10,8 @@ import io.quarkus.amazon.common.deployment.AmazonClientBuilderBuildItem;
 import io.quarkus.amazon.common.deployment.AmazonClientBuilderConfiguredBuildItem;
 import io.quarkus.amazon.common.deployment.AmazonClientInterceptorsPathBuildItem;
 import io.quarkus.amazon.common.deployment.AmazonClientTransportsBuildItem;
+import io.quarkus.amazon.common.runtime.AmazonClientRecorder;
+import io.quarkus.amazon.common.runtime.AmazonClientTransportRecorder;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
@@ -20,6 +22,7 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.quarkus.dynamodb.runtime.DynamodbBuildTimeConfig;
 import io.quarkus.dynamodb.runtime.DynamodbClientProducer;
 import io.quarkus.dynamodb.runtime.DynamodbConfig;
 import io.quarkus.dynamodb.runtime.DynamodbRecorder;
@@ -27,6 +30,8 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 public class DynamodbProcessor extends AbstractAmazonServiceProcessor {
+
+    DynamodbBuildTimeConfig buildTimeConfig;
 
     @Override
     protected String amazonServiceClientName() {
@@ -60,18 +65,36 @@ public class DynamodbProcessor extends AbstractAmazonServiceProcessor {
             BuildProducer<AmazonClientInterceptorsPathBuildItem> interceptors,
             BuildProducer<AmazonClientBuildItem> clientProducer) {
 
-        setupExtension(beanRegistrationPhase, extensionSslNativeSupport, feature, interceptors, clientProducer);
+        setupExtension(beanRegistrationPhase, extensionSslNativeSupport, feature, interceptors, clientProducer,
+                buildTimeConfig.sdk, buildTimeConfig.syncClient);
     }
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    void createClientBuilders(List<AmazonClientTransportsBuildItem> clients, DynamodbRecorder recorder,
+    void setupTransport(DynamodbConfig runtimeConfig, AmazonClientTransportRecorder transportRecorder,
+            List<AmazonClientBuildItem> amazonClients, BuildProducer<AmazonClientTransportsBuildItem> clientTransports) {
+        setupHttpClients(runtimeConfig.syncClient, runtimeConfig.asyncClient, transportRecorder, amazonClients,
+                clientTransports);
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.RUNTIME_INIT)
+    void createClientBuilders(List<AmazonClientTransportsBuildItem> transportBuildItems, DynamodbRecorder recorder,
             DynamodbConfig runtimeConfig,
             BuildProducer<AmazonClientBuilderBuildItem> builderProducer) {
 
-        createExtensionClients(clients, builderProducer,
+        createExtensionClients(transportBuildItems, builderProducer,
                 (syncTransport) -> recorder.createSyncBuilder(runtimeConfig, syncTransport),
                 (asyncTransport) -> recorder.createAsyncBuilder(runtimeConfig, asyncTransport));
+    }
+
+    @BuildStep
+    @Record(ExecutionTime.RUNTIME_INIT)
+    void configureClient(List<AmazonClientBuilderBuildItem> clients, AmazonClientRecorder recorder,
+            DynamodbConfig runtimeConfig,
+            BuildProducer<AmazonClientBuilderConfiguredBuildItem> producer) {
+
+        initClient(clients, recorder, runtimeConfig.aws, runtimeConfig.sdk, buildTimeConfig.sdk, producer);
     }
 
     @BuildStep

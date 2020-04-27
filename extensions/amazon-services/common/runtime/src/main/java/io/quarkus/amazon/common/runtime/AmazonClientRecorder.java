@@ -3,7 +3,6 @@ package io.quarkus.amazon.common.runtime;
 import java.net.URI;
 import java.util.Collections;
 import java.util.Objects;
-import java.util.Optional;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -20,91 +19,64 @@ import software.amazon.awssdk.utils.StringUtils;
 public class AmazonClientRecorder {
     private static final Log LOG = LogFactory.getLog(AmazonClientRecorder.class);
 
-    private AmazonRuntimeConfig runtimeConfig;
-    private AmazonBuildTimeConfig buildTimeConfig;
-
-    public void configureRuntimeConfig(AmazonRuntimeConfig runtimeConfig) {
-        this.runtimeConfig = runtimeConfig;
-    }
-
-    public void setBuildConfig(AmazonBuildTimeConfig buildConfig) {
-        this.buildTimeConfig = buildConfig;
-    }
-
-    private Optional<SdkConfig> getSdkConfig(String awsServiceName) {
-        return Optional.ofNullable(runtimeConfig.sdk.get(awsServiceName));
-    }
-
-    private Optional<AwsConfig> getAwsConfig(String awsServiceName) {
-        return Optional.ofNullable(runtimeConfig.aws.get(awsServiceName));
-    }
-
-    private Optional<SdkBuildTimeConfig> getSdkBuildConfig(String awsServiceName) {
-        return Optional.ofNullable(buildTimeConfig).map(cfg -> cfg.sdk.get(awsServiceName));
-    }
-
     public RuntimeValue<AwsClientBuilder> configureClient(RuntimeValue<? extends AwsClientBuilder> clientBuilder,
+            AwsConfig awsConfig, SdkConfig sdkConfig, SdkBuildTimeConfig sdkBuildTimeConfig,
             String awsServiceName) {
         AwsClientBuilder builder = clientBuilder.getValue();
 
-        initAwsClient(builder, awsServiceName, getAwsConfig(awsServiceName));
-        initSdkClient(builder, awsServiceName, getSdkConfig(awsServiceName), getSdkBuildConfig(awsServiceName));
+        initAwsClient(builder, awsServiceName, awsConfig);
+        initSdkClient(builder, awsServiceName, sdkConfig, sdkBuildTimeConfig);
 
         return new RuntimeValue<>(builder);
     }
 
-    public void initAwsClient(AwsClientBuilder builder, String extension, Optional<AwsConfig> config) {
-        config.ifPresent(cfg -> {
-            cfg.region.ifPresent(builder::region);
+    public void initAwsClient(AwsClientBuilder builder, String extension, AwsConfig config) {
+        config.region.ifPresent(builder::region);
 
-            if (cfg.credentials.type == AwsCredentialsProviderType.STATIC) {
-                if (!cfg.credentials.staticProvider.accessKeyId.isPresent()
-                        || !cfg.credentials.staticProvider.secretAccessKey.isPresent()) {
-                    throw new RuntimeConfigurationError(
-                            String.format("quarkus.%s.aws.credentials.static-provider.access-key-id and "
-                                    + "quarkus.%s.aws.credentials.static-provider.secret-access-key cannot be empty if STATIC credentials provider used.",
-                                    extension, extension));
-                }
+        if (config.credentials.type == AwsCredentialsProviderType.STATIC) {
+            if (!config.credentials.staticProvider.accessKeyId.isPresent()
+                    || !config.credentials.staticProvider.secretAccessKey.isPresent()) {
+                throw new RuntimeConfigurationError(
+                        String.format("quarkus.%s.credentials.static-provider.access-key-id and "
+                                + "quarkus.%s.credentials.static-provider.secret-access-key cannot be empty if STATIC credentials provider used.",
+                                extension, extension));
             }
-            if (cfg.credentials.type == AwsCredentialsProviderType.PROCESS) {
-                if (!cfg.credentials.processProvider.command.isPresent()) {
-                    throw new RuntimeConfigurationError(
-                            String.format(
-                                    "quarkus.%s.aws.credentials.process-provider.command cannot be empty if PROCESS credentials provider used.",
-                                    extension));
-                }
+        }
+        if (config.credentials.type == AwsCredentialsProviderType.PROCESS) {
+            if (!config.credentials.processProvider.command.isPresent()) {
+                throw new RuntimeConfigurationError(
+                        String.format(
+                                "quarkus.%s.credentials.process-provider.command cannot be empty if PROCESS credentials provider used.",
+                                extension));
             }
+        }
 
-            builder.credentialsProvider(cfg.credentials.type.create(cfg.credentials));
-        });
+        builder.credentialsProvider(config.credentials.type.create(config.credentials));
     }
 
-    public void initSdkClient(SdkClientBuilder builder, String extension, Optional<SdkConfig> config,
-            Optional<SdkBuildTimeConfig> buildConfig) {
-        config.ifPresent(cfg -> {
-            if (cfg.endpointOverride.isPresent()) {
-                URI endpointOverride = cfg.endpointOverride.get();
-                if (StringUtils.isBlank(endpointOverride.getScheme())) {
-                    throw new RuntimeConfigurationError(
-                            String.format("quarkus.%s.endpoint-override (%s) - scheme must be specified",
-                                    extension,
-                                    endpointOverride.toString()));
-                }
+    public void initSdkClient(SdkClientBuilder builder, String extension, SdkConfig config,
+            SdkBuildTimeConfig buildConfig) {
+        if (config.endpointOverride.isPresent()) {
+            URI endpointOverride = config.endpointOverride.get();
+            if (StringUtils.isBlank(endpointOverride.getScheme())) {
+                throw new RuntimeConfigurationError(
+                        String.format("quarkus.%s.endpoint-override (%s) - scheme must be specified",
+                                extension,
+                                endpointOverride.toString()));
             }
+        }
 
-            cfg.endpointOverride.filter(URI::isAbsolute).ifPresent(builder::endpointOverride);
+        config.endpointOverride.filter(URI::isAbsolute).ifPresent(builder::endpointOverride);
 
-            final ClientOverrideConfiguration.Builder overrides = ClientOverrideConfiguration.builder();
-            cfg.apiCallTimeout.ifPresent(overrides::apiCallTimeout);
-            cfg.apiCallAttemptTimeout.ifPresent(overrides::apiCallAttemptTimeout);
+        final ClientOverrideConfiguration.Builder overrides = ClientOverrideConfiguration.builder();
+        config.apiCallTimeout.ifPresent(overrides::apiCallTimeout);
+        config.apiCallAttemptTimeout.ifPresent(overrides::apiCallAttemptTimeout);
 
-            buildConfig.ifPresent(
-                    buildCfg -> buildCfg.interceptors.orElse(Collections.emptyList()).stream()
-                            .map(this::createInterceptor)
-                            .filter(Objects::nonNull)
-                            .forEach(overrides::addExecutionInterceptor));
-            builder.overrideConfiguration(overrides.build());
-        });
+        buildConfig.interceptors.orElse(Collections.emptyList()).stream()
+                .map(this::createInterceptor)
+                .filter(Objects::nonNull)
+                .forEach(overrides::addExecutionInterceptor);
+        builder.overrideConfiguration(overrides.build());
     }
 
     private ExecutionInterceptor createInterceptor(Class<?> interceptorClass) {

@@ -3,7 +3,6 @@ package io.quarkus.amazon.common.runtime;
 import java.net.URI;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Optional;
 
 import io.quarkus.amazon.common.runtime.SyncHttpClientBuildTimeConfig.SyncClientType;
 import io.quarkus.runtime.RuntimeValue;
@@ -22,75 +21,45 @@ import software.amazon.awssdk.utils.ThreadFactoryBuilder;
 
 @Recorder
 public class AmazonClientTransportRecorder {
-    private AmazonRuntimeConfig config;
-    private AmazonBuildTimeConfig buildTimeConfig;
-
-    public void configureRuntimeConfig(AmazonRuntimeConfig config) {
-        this.config = config;
-    }
-
-    public void setBuildConfig(AmazonBuildTimeConfig buildConfig) {
-        this.buildTimeConfig = buildConfig;
-    }
-
-    private Optional<SyncHttpClientConfig> getSyncRuntimeConfig(String awsServiceName) {
-        return Optional.ofNullable(config.syncClient.get(awsServiceName));
-    }
-
-    private Optional<NettyHttpClientConfig> getAsyncRuntimeConfig(String awsServiceName) {
-        return Optional.ofNullable(config.asyncClient.get(awsServiceName));
-    }
-
-    private SyncClientType getExtensionSyncClientType(String extension) {
-        return Optional.ofNullable(buildTimeConfig.syncClient.get(extension))
-                .map(cfg -> cfg.type)
-                .orElse(SyncClientType.URL);
-    }
-
-    public RuntimeValue<SdkHttpClient.Builder> createSyncTransport(String awsServiceName) {
+    public RuntimeValue<SdkHttpClient.Builder> createSyncTransport(String clientName, SyncHttpClientBuildTimeConfig buildConfig,
+            SyncHttpClientConfig syncConfig) {
         SdkHttpClient.Builder syncBuilder;
-
-        Optional<SyncHttpClientConfig> config = getSyncRuntimeConfig(awsServiceName);
-
-        if (getExtensionSyncClientType(awsServiceName) == SyncClientType.APACHE) {
+        if (buildConfig.type == SyncClientType.APACHE) {
             Builder builder = ApacheHttpClient.builder();
 
-            config.ifPresent(cfg -> {
-                validateApacheClientConfig(awsServiceName, cfg);
+            validateApacheClientConfig(clientName, syncConfig);
 
-                builder.connectionTimeout(cfg.connectionTimeout);
-                builder.connectionAcquisitionTimeout(cfg.apache.connectionAcquisitionTimeout);
-                builder.connectionMaxIdleTime(cfg.apache.connectionMaxIdleTime);
-                cfg.apache.connectionTimeToLive.ifPresent(builder::connectionTimeToLive);
-                builder.expectContinueEnabled(cfg.apache.expectContinueEnabled);
-                builder.maxConnections(cfg.apache.maxConnections);
-                builder.socketTimeout(cfg.socketTimeout);
-                builder.useIdleConnectionReaper(cfg.apache.useIdleConnectionReaper);
+            builder.connectionTimeout(syncConfig.connectionTimeout);
+            builder.connectionAcquisitionTimeout(syncConfig.apache.connectionAcquisitionTimeout);
+            builder.connectionMaxIdleTime(syncConfig.apache.connectionMaxIdleTime);
+            syncConfig.apache.connectionTimeToLive.ifPresent(builder::connectionTimeToLive);
+            builder.expectContinueEnabled(syncConfig.apache.expectContinueEnabled);
+            builder.maxConnections(syncConfig.apache.maxConnections);
+            builder.socketTimeout(syncConfig.socketTimeout);
+            builder.useIdleConnectionReaper(syncConfig.apache.useIdleConnectionReaper);
 
-                if (cfg.apache.proxy.enabled && cfg.apache.proxy.endpoint.isPresent()) {
-                    ProxyConfiguration.Builder proxyBuilder = ProxyConfiguration.builder()
-                            .endpoint(cfg.apache.proxy.endpoint.get());
-                    cfg.apache.proxy.username.ifPresent(proxyBuilder::username);
-                    cfg.apache.proxy.password.ifPresent(proxyBuilder::password);
-                    cfg.apache.proxy.nonProxyHosts.ifPresent(c -> c.forEach(proxyBuilder::addNonProxyHost));
-                    cfg.apache.proxy.ntlmDomain.ifPresent(proxyBuilder::ntlmDomain);
-                    cfg.apache.proxy.ntlmWorkstation.ifPresent(proxyBuilder::ntlmWorkstation);
-                    cfg.apache.proxy.preemptiveBasicAuthenticationEnabled
-                            .ifPresent(proxyBuilder::preemptiveBasicAuthenticationEnabled);
+            if (syncConfig.apache.proxy.enabled && syncConfig.apache.proxy.endpoint.isPresent()) {
+                ProxyConfiguration.Builder proxyBuilder = ProxyConfiguration.builder()
+                        .endpoint(syncConfig.apache.proxy.endpoint.get());
+                syncConfig.apache.proxy.username.ifPresent(proxyBuilder::username);
+                syncConfig.apache.proxy.password.ifPresent(proxyBuilder::password);
+                syncConfig.apache.proxy.nonProxyHosts.ifPresent(c -> c.forEach(proxyBuilder::addNonProxyHost));
+                syncConfig.apache.proxy.ntlmDomain.ifPresent(proxyBuilder::ntlmDomain);
+                syncConfig.apache.proxy.ntlmWorkstation.ifPresent(proxyBuilder::ntlmWorkstation);
+                syncConfig.apache.proxy.preemptiveBasicAuthenticationEnabled
+                        .ifPresent(proxyBuilder::preemptiveBasicAuthenticationEnabled);
 
-                    builder.proxyConfiguration(proxyBuilder.build());
-                }
+                builder.proxyConfiguration(proxyBuilder.build());
+            }
 
-                builder.tlsKeyManagersProvider(cfg.apache.tlsManagersProvider.type.create(cfg.apache.tlsManagersProvider));
-            });
+            builder.tlsKeyManagersProvider(
+                    syncConfig.apache.tlsManagersProvider.type.create(syncConfig.apache.tlsManagersProvider));
 
             syncBuilder = builder;
         } else {
             UrlConnectionHttpClient.Builder builder = UrlConnectionHttpClient.builder();
-            config.ifPresent(cfg -> {
-                builder.connectionTimeout(cfg.connectionTimeout);
-                builder.socketTimeout(cfg.socketTimeout);
-            });
+            builder.connectionTimeout(syncConfig.connectionTimeout);
+            builder.socketTimeout(syncConfig.socketTimeout);
 
             syncBuilder = builder;
         }
@@ -98,55 +67,53 @@ public class AmazonClientTransportRecorder {
         return new RuntimeValue<>(syncBuilder);
     }
 
-    public RuntimeValue<SdkAsyncHttpClient.Builder> createAsyncTransport(String awsServiceName) {
+    public RuntimeValue<SdkAsyncHttpClient.Builder> createAsyncTransport(String clientName, NettyHttpClientConfig asyncConfig) {
         NettyNioAsyncHttpClient.Builder builder = NettyNioAsyncHttpClient.builder();
 
-        getAsyncRuntimeConfig(awsServiceName).ifPresent(cfg -> {
-            validateNettyClientConfig(awsServiceName, cfg);
+        validateNettyClientConfig(clientName, asyncConfig);
 
-            builder.connectionAcquisitionTimeout(cfg.connectionAcquisitionTimeout);
-            builder.connectionMaxIdleTime(cfg.connectionMaxIdleTime);
-            builder.connectionTimeout(cfg.connectionTimeout);
-            cfg.connectionTimeToLive.ifPresent(builder::connectionTimeToLive);
-            builder.maxConcurrency(cfg.maxConcurrency);
-            builder.maxPendingConnectionAcquires(cfg.maxPendingConnectionAcquires);
-            builder.protocol(cfg.protocol);
-            builder.readTimeout(cfg.readTimeout);
-            builder.writeTimeout(cfg.writeTimeout);
-            cfg.sslProvider.ifPresent(builder::sslProvider);
-            builder.useIdleConnectionReaper(cfg.useIdleConnectionReaper);
+        builder.connectionAcquisitionTimeout(asyncConfig.connectionAcquisitionTimeout);
+        builder.connectionMaxIdleTime(asyncConfig.connectionMaxIdleTime);
+        builder.connectionTimeout(asyncConfig.connectionTimeout);
+        asyncConfig.connectionTimeToLive.ifPresent(builder::connectionTimeToLive);
+        builder.maxConcurrency(asyncConfig.maxConcurrency);
+        builder.maxPendingConnectionAcquires(asyncConfig.maxPendingConnectionAcquires);
+        builder.protocol(asyncConfig.protocol);
+        builder.readTimeout(asyncConfig.readTimeout);
+        builder.writeTimeout(asyncConfig.writeTimeout);
+        asyncConfig.sslProvider.ifPresent(builder::sslProvider);
+        builder.useIdleConnectionReaper(asyncConfig.useIdleConnectionReaper);
 
-            if (cfg.http2.initialWindowSize.isPresent() || cfg.http2.maxStreams.isPresent()) {
-                Http2Configuration.Builder http2Builder = Http2Configuration.builder();
-                cfg.http2.initialWindowSize.ifPresent(http2Builder::initialWindowSize);
-                cfg.http2.maxStreams.ifPresent(http2Builder::maxStreams);
-                builder.http2Configuration(http2Builder.build());
+        if (asyncConfig.http2.initialWindowSize.isPresent() || asyncConfig.http2.maxStreams.isPresent()) {
+            Http2Configuration.Builder http2Builder = Http2Configuration.builder();
+            asyncConfig.http2.initialWindowSize.ifPresent(http2Builder::initialWindowSize);
+            asyncConfig.http2.maxStreams.ifPresent(http2Builder::maxStreams);
+            builder.http2Configuration(http2Builder.build());
+        }
+
+        if (asyncConfig.proxy.enabled && asyncConfig.proxy.endpoint.isPresent()) {
+            software.amazon.awssdk.http.nio.netty.ProxyConfiguration.Builder proxyBuilder = software.amazon.awssdk.http.nio.netty.ProxyConfiguration
+                    .builder().scheme(asyncConfig.proxy.endpoint.get().getScheme())
+                    .host(asyncConfig.proxy.endpoint.get().getHost())
+                    .nonProxyHosts(new HashSet<>(asyncConfig.proxy.nonProxyHosts.orElse(Collections.emptyList())));
+
+            if (asyncConfig.proxy.endpoint.get().getPort() != -1) {
+                proxyBuilder.port(asyncConfig.proxy.endpoint.get().getPort());
             }
+            builder.proxyConfiguration(proxyBuilder.build());
+        }
 
-            if (cfg.proxy.enabled && cfg.proxy.endpoint.isPresent()) {
-                software.amazon.awssdk.http.nio.netty.ProxyConfiguration.Builder proxyBuilder = software.amazon.awssdk.http.nio.netty.ProxyConfiguration
-                        .builder().scheme(cfg.proxy.endpoint.get().getScheme())
-                        .host(cfg.proxy.endpoint.get().getHost())
-                        .nonProxyHosts(new HashSet<>(cfg.proxy.nonProxyHosts.orElse(Collections.emptyList())));
+        builder.tlsKeyManagersProvider(asyncConfig.tlsManagersProvider.type.create(asyncConfig.tlsManagersProvider));
 
-                if (cfg.proxy.endpoint.get().getPort() != -1) {
-                    proxyBuilder.port(cfg.proxy.endpoint.get().getPort());
-                }
-                builder.proxyConfiguration(proxyBuilder.build());
+        if (asyncConfig.eventLoop.override) {
+            SdkEventLoopGroup.Builder eventLoopBuilder = SdkEventLoopGroup.builder();
+            asyncConfig.eventLoop.numberOfThreads.ifPresent(eventLoopBuilder::numberOfThreads);
+            if (asyncConfig.eventLoop.threadNamePrefix.isPresent()) {
+                eventLoopBuilder.threadFactory(
+                        new ThreadFactoryBuilder().threadNamePrefix(asyncConfig.eventLoop.threadNamePrefix.get()).build());
             }
-
-            builder.tlsKeyManagersProvider(cfg.tlsManagersProvider.type.create(cfg.tlsManagersProvider));
-
-            if (cfg.eventLoop.override) {
-                SdkEventLoopGroup.Builder eventLoopBuilder = SdkEventLoopGroup.builder();
-                cfg.eventLoop.numberOfThreads.ifPresent(eventLoopBuilder::numberOfThreads);
-                if (cfg.eventLoop.threadNamePrefix.isPresent()) {
-                    eventLoopBuilder.threadFactory(
-                            new ThreadFactoryBuilder().threadNamePrefix(cfg.eventLoop.threadNamePrefix.get()).build());
-                }
-                builder.eventLoopGroupBuilder(eventLoopBuilder);
-            }
-        });
+            builder.eventLoopGroupBuilder(eventLoopBuilder);
+        }
 
         return new RuntimeValue<>(builder);
     }

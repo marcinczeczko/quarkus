@@ -59,7 +59,9 @@ public class S3Processor extends AbstractAmazonServiceProcessor {
             BuildProducer<AmazonClientInterceptorsPathBuildItem> interceptors,
             BuildProducer<AmazonClientBuildItem> clientProducer) {
 
-        setupExtension(beanRegistrationPhase, extensionSslNativeSupport, feature, interceptors, clientProducer);
+        setupExtension(beanRegistrationPhase, extensionSslNativeSupport, feature, interceptors, clientProducer,
+                buildTimeConfig.sdk,
+                buildTimeConfig.syncClient);
     }
 
     @BuildStep
