@@ -26,6 +26,9 @@ import io.quarkus.dynamodb.runtime.DynamodbBuildTimeConfig;
 import io.quarkus.dynamodb.runtime.DynamodbClientProducer;
 import io.quarkus.dynamodb.runtime.DynamodbConfig;
 import io.quarkus.dynamodb.runtime.DynamodbRecorder;
+import io.quarkus.runtime.RuntimeValue;
+import software.amazon.awssdk.http.SdkHttpClient.Builder;
+import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
@@ -71,10 +74,19 @@ public class DynamodbProcessor extends AbstractAmazonServiceProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    void setupTransport(DynamodbConfig runtimeConfig, AmazonClientTransportRecorder transportRecorder,
-            List<AmazonClientBuildItem> amazonClients, BuildProducer<AmazonClientTransportsBuildItem> clientTransports) {
-        setupHttpClients(runtimeConfig.syncClient, runtimeConfig.asyncClient, transportRecorder, amazonClients,
-                clientTransports);
+    void setupTransport(DynamodbConfig runtimeConfig, DynamodbRecorder recorder, AmazonClientTransportRecorder transportRecorder,
+            List<AmazonClientBuildItem> amazonClients,
+            BuildProducer<AmazonClientTransportsBuildItem> clientTransportBuildProducer) {
+
+        recorder.setTransportRecorder(transportRecorder);
+
+        RuntimeValue<Builder> syncTransport = recorder
+                .createSyncTransport(amazonServiceClientName(), buildTimeConfig, runtimeConfig);
+
+        RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport = recorder
+                .createAsyncTransport(amazonServiceClientName(), runtimeConfig);
+
+        setupHttpClients(amazonClients, syncTransport, asyncTransport, clientTransportBuildProducer);
     }
 
     @BuildStep

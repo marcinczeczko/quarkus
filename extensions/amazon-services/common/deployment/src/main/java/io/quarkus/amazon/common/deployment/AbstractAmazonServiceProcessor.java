@@ -8,13 +8,10 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
 import io.quarkus.amazon.common.runtime.AmazonClientRecorder;
-import io.quarkus.amazon.common.runtime.AmazonClientTransportRecorder;
 import io.quarkus.amazon.common.runtime.AwsConfig;
-import io.quarkus.amazon.common.runtime.NettyHttpClientConfig;
 import io.quarkus.amazon.common.runtime.SdkBuildTimeConfig;
 import io.quarkus.amazon.common.runtime.SdkConfig;
 import io.quarkus.amazon.common.runtime.SyncHttpClientBuildTimeConfig;
-import io.quarkus.amazon.common.runtime.SyncHttpClientConfig;
 import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.InjectionPointInfo;
@@ -70,9 +67,10 @@ abstract public class AbstractAmazonServiceProcessor {
         }
     }
 
-    public void setupHttpClients(SyncHttpClientConfig syncConfig, NettyHttpClientConfig asyncConfig,
-            AmazonClientTransportRecorder transportRecorder,
-            List<AmazonClientBuildItem> amazonClients, BuildProducer<AmazonClientTransportsBuildItem> clientTransports) {
+    public void setupHttpClients(List<AmazonClientBuildItem> amazonClients,
+            RuntimeValue<SdkHttpClient.Builder> syncSupplier,
+            RuntimeValue<SdkAsyncHttpClient.Builder> asyncSupplier,
+            BuildProducer<AmazonClientTransportsBuildItem> clientTransports) {
 
         Optional<AmazonClientBuildItem> dynamoBuildItem = amazonClients.stream()
                 .filter(c -> c.getAwsClientName().equals(amazonServiceClientName()))
@@ -83,14 +81,13 @@ abstract public class AbstractAmazonServiceProcessor {
             RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport = null;
 
             if (dynamoClient.getSyncClassName().isPresent()) {
-                syncTransport = transportRecorder.createSyncTransport(amazonServiceClientName(),
-                        dynamoClient.getBuildTimeSyncConfig(),
-                        syncConfig);
+                syncTransport = syncSupplier;
             }
 
             if (dynamoClient.getAsyncClassName().isPresent()) {
-                asyncTransport = transportRecorder.createAsyncTransport(amazonServiceClientName(), asyncConfig);
+                asyncTransport = asyncSupplier;
             }
+
             clientTransports.produce(
                     new AmazonClientTransportsBuildItem(
                             dynamoClient.getSyncClassName(), dynamoClient.getAsyncClassName(),
